@@ -10,7 +10,7 @@ DPIN--39R--+--10R---TESTLED---GND
  From target current, we can calculate R to be used with a design supply voltage and a matching part number.
   */
 
-//#define SSD1306_DISPLAY // Version for the SSD1306 0.96-inch display I2C 
+#define SSD1306_DISPLAY // Version for the SSD1306 0.96-inch display I2C 
 
 #include <Wire.h>
 #ifdef SSD1306_DISPLAY
@@ -184,14 +184,16 @@ void dolcd() {
   display.print("It=");
   if (lcdflash || rvalid) {  //show if correct if on flashing phase
     if (itest > 9) {
+      //Serial.println((itest / 10) % 10);
       //display.print(((itest / 10) % 10) + '0');
       display.print(((itest / 10) % 10));
-      display.print('0');
+      //display.print('0');
     } else {
       display.print(' ');
     }  //blank tens if zero
+    //Serial.println(itest % 10);
     //display.print((itest % 10) + '0');
-    //display.print((itest % 10));
+    display.print((itest % 10));
     //display.print('0');
   } else {  //blank if not
     display.print(' ');
