@@ -9,8 +9,18 @@ DPIN--39R--+--10R---TESTLED---GND
  Measures LED characteristics by charging up the cap to deliver target current and find forward voltage
  From target current, we can calculate R to be used with a design supply voltage and a matching part number.
   */
+
+// Comment the following define if you are using 1602 LCD Display
+#define SSD1306_DISPLAY // Version for the SSD1306 0.96-inch display I2C 
+
 #include <Wire.h>
+#ifdef SSD1306_DISPLAY
+#include <Adafruit_GFX.h>
+#include <Adafruit_SSD1306.h>
+#else
 #include <LiquidCrystal_I2C.h>
+#endif
+
 //lcd update interval
 #define LCDINT 500
 //key check interval
@@ -24,38 +34,65 @@ DPIN--39R--+--10R---TESTLED---GND
 #define btnLEFT 3
 #define btnSELECT 2
 #define btnNONE (-1)
+
+#ifdef SSD1306_DISPLAY
+#define SCREEN_WIDTH 128  // OLED display width, in pixels
+#define SCREEN_HEIGHT 64  // OLED display height, in pixels
+Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, -1);
+#define OLED_RESET 4  //OLED reset on pin 4
+#else
 LiquidCrystal_I2C lcd(0x27, 16, 2);  // set the LCD adress
+#endif
+
 //Globals for display
 long itest = 10;            //test current, in mA
 long vset = 14000;          //display voltage in mV
 long vled, vrr, irr, pset;  //LED voltage, Resistor voltage, resistor current, display power
+
 //resistors in Jaycar 1/2 W range, part nos start at RR0524 for 10R
 #define RCOUNT 121
-long rvals[] = { 10, 11, 12, 13, 15, 16, 18, 20, 22, 24, 27, 30, 33, 36, 39, 43, 47, 51, 56, 62, 68, 75, 82, 91, 100, 110, 120, 130, 150, 160, 180, 200, 220, 240, 270, 300, 330, 360, 390, 430, 470, 510, 560, 620, 680, 750, 820, 910, 1000, 1100, 1200, 1300, 1500, 1600, 1800, 2000, 2200, 2400, 2700, 3000, 3300, 3600, 3900, 4300, 4700, 5100, 5600, 6200, 6800, 7500, 8200, 9100, 10000, 11000, 12000, 13000, 15000, 16000, 18000, 20000, 22000, 24000, 27000, 30000, 33000, 36000, 39000, 43000, 47000, 51000, 56000, 62000, 68000, 75000, 82000, 91000, 100000, 110000, 120000, 130000, 150000, 160000, 180000, 200000, 220000, 240000, 270000, 300000, 330000, 360000, 390000, 430000, 470000, 510000, 560000, 620000, 680000, 750000, 820000, 910000, 1000000 };
+// Place rvals[] array to PROGMEM to avoid SSD1306 initialization failure
+const PROGMEM long rvals[] = { 10, 11, 12, 13, 15, 16, 18, 20, 22, 24, 27, 30, 33, 36, 39, 43, 47, 51, 56, 62, 68, 75, 82, 91, 100, 110, 120, 130, 150, 160, 180, 200, 220, 240, 270, 300, 330, 360, 390, 430, 470, 510, 560, 620, 680, 750, 820, 910, 1000, 1100, 1200, 1300, 1500, 1600, 1800, 2000, 2200, 2400, 2700, 3000, 3300, 3600, 3900, 4300, 4700, 5100, 5600, 6200, 6800, 7500, 8200, 9100, 10000, 11000, 12000, 13000, 15000, 16000, 18000, 20000, 22000, 24000, 27000, 30000, 33000, 36000, 39000, 43000, 47000, 51000, 56000, 62000, 68000, 75000, 82000, 91000, 100000, 110000, 120000, 130000, 150000, 160000, 180000, 200000, 220000, 240000, 270000, 300000, 330000, 360000, 390000, 430000, 470000, 510000, 560000, 620000, 680000, 750000, 820000, 910000, 1000000 };
+
 long lastlcd = 0;  //time of last lcd update
 long lastkey = 0;  //time of last key check
 int lcdflash = 0;  //lcd flashing phase variable
-long pdes;
-long rval;       //calculated resistor value for display
-long rindex;     //index of selected resistor in rvals[]
+long pdes = 0;
+long rval = 0;       //calculated resistor value for display
+long rindex = 0;     //index of selected resistor in rvals[]
 int pwmout = 0;  //pwm output of current driver
 int rvalid = 0;  //flag if resistor value is valid
+
 //pins for test interface
 #define ATOP A2
 #define ABOT A3
 #define DPIN 3
 #define OSAMP 16
 
+//--------------------------
 void setup() {
+//--------------------------
   Serial.begin(9600);
+#ifdef SSD1306_DISPLAY
+  if (!display.begin(SSD1306_SWITCHCAPVCC, 0x3C)) {
+    Serial.println(F("SSD1306 allocation failed"));
+    for (;;)
+      ;
+  }
+  //delay(2000);
+  display.clearDisplay();
+  display.setTextColor(WHITE);
+#else
   lcd.begin(16, 2);  //lcd
-  //lcd.begin();
   lcd.clear();
   lcd.backlight();
+#endif
   pinMode(DPIN, OUTPUT);  //pwm pin
 }
 
+//--------------------------
 void loop() {
+//--------------------------
   long atop, abot, arr;  //analog sample values
   rvalid = 0;            //set flag to not valid
   atop = analogoversample(ATOP, OSAMP) / OSAMP;
@@ -95,9 +132,10 @@ void loop() {
   analogWrite(DPIN, pwmout);          //output new PWM
   rval = (vset - vled) / itest;       //mV/mV => ohms resistance of display resistor
   for (int i = 0; i < RCOUNT; i++) {  //find next highest E24 value
-    if (rvals[i] >= rval) {
+    long currRval = pgm_read_dword_near(rvals + i);
+    if (currRval >= rval) {
       rindex = i;
-      rval = rvals[rindex];
+      rval = currRval;
       i = RCOUNT + 1;
       rvalid = 1;
     }
@@ -125,7 +163,89 @@ void loop() {
   delay(1);
 }  //end of loop
 
+#ifdef SSD1306_DISPLAY
+//--------------------------
 void dolcd() {
+//--------------------------
+// SSD1306 version
+//--------------------------
+  display.clearDisplay();
+  display.setTextSize(2);        //set text sizez
+  display.setTextColor(WHITE);   //set text color
+  display.setCursor(0, 0);       //set cursor
+  //milliamps
+  display.print("It=");
+  if (lcdflash || rvalid) {  //show if correct if on flashing phase
+    if (itest > 9) {
+      display.print(((itest / 10) % 10));
+    } else {
+      display.print(' '); //blank tens if zero
+    }  
+    display.print((itest % 10));
+  } else {  
+    display.print(' '); //blank if not
+    display.print(' ');
+  }
+  display.print('m');
+  display.print('A');
+  display.println(' ');
+
+  //VLED
+  display.print(((vled / 1000) % 10));
+  display.print('.');
+  display.print(((vled / 100) % 10));
+  display.print('V');
+  display.print(' ');
+
+ //actual LED current
+  if (irr > 9) {
+    display.print(((irr / 10) % 10));
+  } else {
+    display.print(' ');
+  }  //blank tens if zero
+  display.print((irr % 10));
+  display.print('m');
+  display.println('A');
+
+  if (vset > 9999) {
+    display.print(((vset / 10000) % 10));
+  } else {
+    display.print(' ');
+  }                                     //tens of vset, blank if zero
+  display.print(((vset / 1000) % 10));  //units of vset
+  display.print('V');
+  display.print(' ');
+
+  if (rvalid) {
+    lcdprintrval(rval);  //resistor value (4 characters)
+    display.println();
+    if (pset > 124999 && pset < 250000) // Display ballast resistor power warning
+      display.print("P>0.125W");
+    else if(pset > 249999 && pset < 500000)
+      display.print("P>0.25W");
+    else if(pset > 499999 && pset < 1000000)
+      display.print("P>0.5W");
+    else if(pset > 999999 && pset < 2000000)
+      display.print("P>1.0W");
+    else if(pset > 1999999)
+      display.print("P>2.0W");   
+  } else {
+    display.print(' ');
+    display.print(' ');
+    display.print('-');
+    display.print('-');
+    display.print('-');
+    display.println('-');
+  }
+
+  display.display();
+}
+#else
+//--------------------------
+void dolcd() {
+//--------------------------
+// 1602 version
+//--------------------------
   lcd.setCursor(0, 0);  //first line
   //milliamps
   if (lcdflash || rvalid) {  //show if correct if on flashing phase
@@ -200,8 +320,22 @@ void dolcd() {
     lcd.write(' ');
   }
 }
+#endif
 
+#ifdef SSD1306_DISPLAY
+//--------------------------
 void lcdprintpartno(int index) {
+//--------------------------
+// SSD1306 version
+//--------------------------
+  // Don't print part number on SSD1306 display
+}
+#else
+//--------------------------
+void lcdprintpartno(int index) {
+//--------------------------
+// 1602 version
+//--------------------------
   //part number
   lcd.write('R');
   lcd.write('R');
@@ -210,8 +344,48 @@ void lcdprintpartno(int index) {
   lcd.write((((index + 524) / 10) % 10) + '0');
   lcd.write((((index + 524)) % 10) + '0');
 }
+#endif
 
+#ifdef SSD1306_DISPLAY
+//--------------------------
+void lcdprintrval(long rval) {
+//--------------------------
+// SSD1306 version
+//--------------------------
+  long mult = 1;
+  long modval;
+  if (rval > 999) { 
+    mult = 1000; 
+  }
+  if (rval > 999999) { 
+    mult = 1000000; 
+  }
+  modval = (10 * rval) / mult;  //convert to final format, save a decimal place
+  if (modval > 999) {           //nnnM
+    display.print(((modval / 1000) % 10));
+    display.print(((modval / 100) % 10));
+    display.print(((modval / 10) % 10));
+    lcdprintmult(mult);
+  } else {
+    if (modval > 99) {  //nnMn
+      display.print(((modval / 100) % 10));
+      display.print(((modval / 10) % 10));
+      lcdprintmult(mult);
+      display.print(((modval) % 10));
+    } else {  //_nMn
+      display.print(' ');
+      display.print(((modval / 10) % 10));
+      lcdprintmult(mult);
+      display.print(((modval) % 10));
+    }
+  }
+}
+#else
+//--------------------------
 void lcdprintrval(long rval) {  //print a value in 10k0 format, always outputs 4 characters
+//--------------------------
+// 1602 version
+//--------------------------
   long mult = 1;
   long modval;
   if (rval > 999) { mult = 1000; }
@@ -236,8 +410,38 @@ void lcdprintrval(long rval) {  //print a value in 10k0 format, always outputs 4
     }
   }
 }
+#endif
 
+#ifdef SSD1306_DISPLAY
+//--------------------------
+void lcdprintmult(long mult) {
+//--------------------------
+// SSD1306 version
+//--------------------------
+  switch (mult) {
+    case 1:
+      display.print('R');
+      break;
+
+    case 1000:
+      display.print('k');
+      break;
+
+    case 1000000:
+      display.print('M');
+      break;
+
+    default:
+      display.print('?');
+      break;
+  }
+}
+#else
+//--------------------------
 void lcdprintmult(long mult) {  //helper function to print multiplier
+//--------------------------
+// 1602 version
+//--------------------------
   switch (mult) {
     case 1:
       lcd.print('R');
@@ -256,8 +460,11 @@ void lcdprintmult(long mult) {  //helper function to print multiplier
       break;
   }
 }
+#endif
 
+//--------------------------
 int read_LCD_buttons() {
+//--------------------------
   int adc_key_in = 0;
   adc_key_in = analogRead(KEYPIN);            // read the value from the sensor
   delay(5);                                   //switch debounce delay. Increase this delay if incorrect switch selections are returned.
@@ -281,7 +488,9 @@ int read_LCD_buttons() {
   return btnNONE;  // when all others fail, return this...
 }
 
+//--------------------------
 void dobuttons() {  //updates variables. debounces by only sampling at intervals
+//--------------------------
   int key;
   key = read_LCD_buttons();
   if (key == btnLEFT) {
@@ -310,7 +519,9 @@ void dobuttons() {  //updates variables. debounces by only sampling at intervals
   }
 }
 
+//--------------------------
 long analogoversample(int pin, int samples) {  //read pin samples times and return sum
+//--------------------------
   long n = 0;
   for (int i = 0; i < samples; i++) {
     n = n + analogRead(pin);
