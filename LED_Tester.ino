@@ -219,16 +219,13 @@ void dolcd() {
   if (rvalid) {
     lcdprintrval(rval);  //resistor value (4 characters)
     display.println();
-    if (pset > 124999 && pset < 250000) // Display ballast resistor power warning
-      display.print("P>0.125W");
-    else if(pset > 249999 && pset < 500000)
-      display.print("P>0.25W");
-    else if(pset > 499999 && pset < 1000000)
-      display.print("P>0.5W");
-    else if(pset > 999999 && pset < 2000000)
-      display.print("P>1.0W");
-    else if(pset > 1999999)
-      display.print("P>2.0W");   
+    char valueString[20];
+    dtostrf((float)pset / 1000000.0f, 4, 3, valueString); //convert power to string
+    while (valueString[strlen(valueString) - 1] == '0')   //strip the tailing zeroes
+      valueString[strlen(valueString) - 1] = '\0';
+    display.print("P="); //print the power value
+    display.print(valueString);
+    display.print("W");
   } else {
     display.print(' ');
     display.print(' ');
